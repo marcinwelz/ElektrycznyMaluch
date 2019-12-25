@@ -1,37 +1,40 @@
 #include <AM2320.h>
 #include <LiquidCrystal_I2C.h>
 
-  unsigned long button_time;
-  uint16_t  battery_voltage;     //*100  
-  uint16_t  circuit_voltage;     //*100  
-  //battery_current,  
-  //circuit_current,  
-  float  engine_temp;          
-  int16_t  engine_humidity;      //*10
-  int16_t  driver_temp;          //*10
-  byte  engine_fan;
-  bool  hamulec;                    
-  bool  driver_fan;          
-  bool  silnik;    
+//data
+unsigned long button_click_time;
+uint16_t  battery_voltage;     //*100  
+uint16_t  circuit_voltage;     //*100  
+//battery_current,  
+//circuit_current,  
+float  engine_temp;          
+float  engine_humidity;      //*10
+float  driver_temp;          //*10
+byte  engine_fan;
+bool  brake;                    
+bool  driver_fan;          
+bool  engine;   
+bool  back_light; 
 
-
-// sensor setup
+// setup
 TwoWire twoWire;
 AM2320 sensor(&twoWire);
+LiquidCrystal_I2C lcd(0x27,20,4);   
 
-#define RefreshTime             1000             
+// constants
+#define RefreshTime             400            
 #define V120_VoltageRead_Pin    A0    
 #define V12_VoltageRead_Pin     A1    
 #define Fan_Control_Pin1        12      //D12
-#define Fan_Control_Pin2        11      //D11
-#define Fan_Control_Pin3        10      //D10
+#define Fan_Control_Pin2        10      //D11
+#define Fan_Control_Pin3        9      //D10
+#define Light_Control_Pin       8
 #define Button_Pin              13      //D13
 //#define TemperatureRead_Pin     10
 #define Reference_Value         5    //You can check it at pin "REF"
 
-LiquidCrystal_I2C lcd(0x27,20,4);   
-
 //List of Functions 
+void lcdSetup (void);
 void showDataOnLcd (void);
 void meassureVoltage (void);
 void fanControl (byte mode);
@@ -45,16 +48,21 @@ void setup()
   pinMode(Fan_Control_Pin2,OUTPUT);
   pinMode(Fan_Control_Pin3,OUTPUT);
   pinMode(Button_Pin,INPUT);
+  pinMode(Light_Control_Pin,OUTPUT);
+  digitalWrite(Light_Control_Pin,HIGH);
+  
+  back_light = 1;
   engine_fan=4;
+  button_click_time=0;
 
   twoWire.begin();          //is it necessary?
-  Serial.begin(9600);
-  lcd.init();
-  lcd.backlight();
+  Serial.begin(38400);
+  lcdSetup();
 }
 
 void loop() 
 {
+   
   sensor.Read();
   engine_temp=sensor.cTemp;
   meassureVoltage();
@@ -64,44 +72,65 @@ void loop()
   delay(RefreshTime);
 }
 
-void showDataOnLcd (void)
+void lcdSetup (void)
 {
-  float output;
+  lcd.init();
+  lcd.backlight();
+  
   lcd.setCursor(0,0); 
   lcd.print("CircuitVolt: ");
-  output=circuit_voltage;
-  lcd.print(output/100,2);  
   lcd.setCursor(19,0);
   lcd.print("V");
 
   lcd.setCursor(0,1); 
   lcd.print("BatteryVolt: ");
-  output=battery_voltage;
-  lcd.print(output/10,1);  
   lcd.setCursor(19,1);
   lcd.print("V");
-  
+
   lcd.setCursor(0,2); 
   lcd.print("Engine_Temp: ");
-  lcd.print(engine_temp,1);  
   lcd.setCursor(19,2);
   lcd.print("C");
 
   lcd.setCursor(0,3); 
   lcd.print("FanMode:");
+  
+}
+
+void showDataOnLcd (void)
+{
+  float output;
+
+  lcd.setCursor(13,0);
+  output=circuit_voltage;
+  lcd.print(output/100,2);  
+  
+
+  lcd.setCursor(13,1);
+  output=battery_voltage;
+  lcd.print(output/10,1);  
+  
+  lcd.setCursor(14,2);
+  lcd.print(engine_temp,1); 
+  if(engine_temp<10000)
+    lcd.print(" "); 
+  
+
+  lcd.setCursor(8,3); 
   if(engine_fan==4)
     lcd.print("AUTO");
   else if(engine_fan==0)
   {
-    lcd.print("off");
+    lcd.print("off ");
   }
   else
   {
-  lcd.setCursor(9,3); 
-  lcd.print(engine_fan);
+    lcd.print(" ");
+    lcd.print(engine_fan);
+    lcd.print("  ");
   }
   
-  if(button_time)
+  if(button_click_time)
   {
   lcd.setCursor(14,3);
   lcd.print("button");
@@ -159,6 +188,9 @@ void fanControl (byte mode)
     case 4:
       fanControl (automaticMode());
       break;
+    default:
+      engine_fan = 0;
+      break;
   }
 }
 
@@ -178,36 +210,45 @@ void buttonControl()
 {
   switch (digitalRead(Button_Pin))
   {
-  case LOW:
-    if (button_time)                  // button is bening held
+  case LOW:                           
+    if (button_click_time)                  //button is released
     {
-      return;                         // do nothing  
+      if((millis()-button_click_time)>1500)   // more than 1.5 sec
+        {
+          if(back_light)
+          {
+            digitalWrite(Light_Control_Pin,LOW);
+            back_light=true;
+          }
+          else
+          {
+            digitalWrite(Light_Control_Pin,HIGH);
+            back_light=false;
+          }
+        }
+        else                                  // less than 1.5 sec
+        {
+          engine_fan++;                 
+          if(engine_fan==5)
+            engine_fan=0;
+        }
+        
+      button_click_time=0;                  // set button free!!!
+      return;                        
     }                 
-    else                              // button has been clicked
+    else                                    //button is not clicked
     {
-      button_time=millis();           // check and save time
-      break;
+      return;
     }
+    
   case HIGH:
-    if(button_time)                   // button has been relesed
+    if(button_click_time)                   // button is held
     {                                 
-      if((millis()-button_time)>1500)   // check how long has been held
-      {
-        engine_fan=4;                 // more than 1.5 sec
-      }
-      else
-      {
-        engine_fan++;                 // less than 1.5 sec
-        if(engine_fan==5)
-          engine_fan=0;
-      }
-      
-      button_time=0;                  // set button free!!!
-      break;
+      return;
     }
-    else                              // nothing is happening
+    else                                    // button has been clicked
     {
-      return;                         // do nothing 
+      button_click_time=millis();
     }
   }
 }
