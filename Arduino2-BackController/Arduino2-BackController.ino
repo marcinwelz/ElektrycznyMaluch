@@ -1,6 +1,6 @@
 
 //    Version 1.2.4
-
+#include <Wire.h>
 #include <AM2320.h>
 #include <LiquidCrystal_I2C.h>
 
@@ -90,20 +90,21 @@ LiquidCrystal_I2C lcd(0x27,20,4);
 
 void setup()
 {
+  Serial.begin(38400);
   pinMode(Fan_Control_Pin1,OUTPUT);
   pinMode(Fan_Control_Pin2,OUTPUT);
   pinMode(Fan_Control_Pin3,OUTPUT);
   pinMode(Button_Pin,INPUT);
   pinMode(Light_Control_Pin,OUTPUT);
   digitalWrite(Light_Control_Pin,HIGH);
-  
+  Serial.println("ok");
   back_light = 1;
   engine_fan_mode=normal;
   button_click_time=0;
   engine_fan_current_level=0;
 
   twoWire.begin();          //is it necessary?
-  //Serial.begin(38400);
+  
   lcdSetup();
   delay (1000);
 }
@@ -111,8 +112,9 @@ void setup()
 
 void loop() 
 {
+  delay(2000);
   unsigned long Time=millis();
-  sensor.Read();
+  lcd.println(sensor.Read());
   engine_temp=sensor.cTemp;
   meassureVoltage();
   buttonControl();
@@ -122,6 +124,7 @@ void loop()
   {  
     showDataOnLcd();
     loop_saved_time=Time;
+    
   }
   
 //  delay(RefreshTime);
@@ -133,23 +136,22 @@ void lcdSetup (void)
   lcd.backlight();
   
   lcd.setCursor(0,0); 
-  lcd.print("CircuitV: ");
+  lcd.print(F("CircuitV: "));
   lcd.setCursor(19,0);
   lcd.print("L");
 
   lcd.setCursor(0,1); 
-  lcd.print("BatteryV: ");
+  lcd.print(F("BatteryV: "));
   lcd.setCursor(19,1);
   lcd.print("P");
 
   lcd.setCursor(0,2); 
-  lcd.print("Engine_Temp: ");
+  lcd.print(F("Engine_Temp: "));
   lcd.setCursor(19,2);
   lcd.print("C");
 
   lcd.setCursor(0,3); 
   lcd.print("FanMode:");
-
 }
 
 void showDataOnLcd (void)
@@ -158,11 +160,11 @@ void showDataOnLcd (void)
 
   lcd.setCursor(10,0);
   output=circuit_voltage;
-  lcd.print(output/100,2);  
+  lcd.print(output/100,2);
 
   lcd.setCursor(10,1);
   output=battery_voltage;
-  lcd.print(output/10,1);  
+  lcd.print(output/10,1);
   
   lcd.setCursor(14,2);
   lcd.print(engine_temp,1); 
@@ -205,7 +207,7 @@ int Read_Pin_Temp(const int Pin)
   // analogRead(A1)p = x mV
   // x = ref*analogRead(A1)/1023
   float V = (Reference_Value*analogRead(Pin))/1023;  // voltage in mV
-
+  
   V *= 0.1;
   V -= 50;
   //500mV => 0*C
