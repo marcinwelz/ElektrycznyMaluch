@@ -1,73 +1,23 @@
+//    Version 3.2   //
 
-//    Version 2.4
+//#define K_Debug
 
+#include <KacperDebug.h>
+#include <KacperPinControl.h>
 #include <AM2320.h>
 #include <LiquidCrystal_I2C.h>
 
-// constants    
-//#define Debug                       //Comment this line in final version
+
 #define V120_VoltageRead_Pin    A0    
-#define V12_VoltageRead_Pin     A1    
+#define V12_VoltageRead_Pin     A1  
+#define EngineTemp_R            A6
+#define EngineTemp_L            A7  
 #define Fan_Control_Pin1        9       //Minimum Power
 #define Fan_Control_Pin2        12      //Medium  Power
 #define Fan_Control_Pin3        10      //Maximum Power
 #define Light_Control_Pin       8
 #define Button_Pin              13      //D13
-#define Reference_Value         5       //You can check it at pin "REF" 
-#define Correction_Coefficient  1,01145 //corrects
-
-
-//data
-unsigned long button_click_time;
-unsigned long loop_saved_time;
-uint16_t  battery_voltage;     //*100
-uint16_t  circuit_voltage;     //*100
-//battery_current;  
-//circuit_current;  
-float  engine_temp;          
-float  engine_humidity;      
-float  driver_temp;          
-uint8_t  engine_fan_mode;
-uint8_t  engine_fan_current_level;
-bool  brake;                    
-bool  driver_fan;          
-bool  engine;   
-bool  back_light; 
-struct customMode {uint8_t i1,i2,i3;} custom_fan_mode;
-
-
-//List of Functions 
-void lcdSetup (void);
-void showDataOnLcd (void);
-void meassureVoltage (void);
-int Read_Pin_Temp(const int Pin);
-void fanControl (uint8_t mode);
-uint8_t automaticMode (float,float,float);
-void buttonControl(void);
-void printFanModeName (int8_t mode);
-
-
-
-//Debug Functints
-void DebugFunctionSet();
-
-#ifdef Debug
-void codeSpeed (const unsigned long A,const unsigned long B,unsigned long &Time);
-extern unsigned int __bss_end;
-extern unsigned int __heap_start;
-extern void *__brkval;
-extern "C" {
-  int freeMemory()
-  {
-    int free_memory;
-    if((int)__brkval == 0)
-      free_memory = ((int)&free_memory) - ((int)&__bss_end);
-    else
-      free_memory = ((int)&free_memory) - ((int)__brkval);
-    return free_memory;
-  }
-}
-#endif
+#define REF                     4920    //mV
 
 enum fanModeName
 {
@@ -81,50 +31,80 @@ enum fanModeName
   custom
 };
 
+//functionts                          // update names to higher standard!
+inline void displayerSetup (void);
+inline void fanControl (uint8_t mode);        //  read about inline vs noinline!
+uint8_t automaticMode (float,float,float);    // change to lambda or something more temporary!
+inline void buttonControl (unsigned long &Time);
+inline void displayerControl(void);
 
-// setup
-TwoWire twoWire;
-AM2320 sensor(&twoWire);
+//objects
+AM2320 SensorA(&Wire);
+Button button(Button_Pin);
 LiquidCrystal_I2C lcd(0x27,20,4);
 
+//Variables     //modernize virable types to newest standards, sort them!
+unsigned long loop_saved_time =2000;    // move to "loop" or delete!
+bool          BackLight=0;
+uint8_t       EngineFan_Mode=normal;
+uint8_t       EngineFan_State=4;
+int16_t       Engine_Temperature;
+float         SensorAm_Temperature;
+float         SensorAm_Humidity;
+uint16_t      SensorL_Temperature;
+uint16_t      SensorR_Temperature;
+uint16_t      Circut_Voltage;
+uint16_t      Battery_Voltage;
 
+using namespace Debug;
 void setup()
 {
+  Serial.begin(38400);
+  Wire.begin();
+
   pinMode(Fan_Control_Pin1,OUTPUT);
   pinMode(Fan_Control_Pin2,OUTPUT);
   pinMode(Fan_Control_Pin3,OUTPUT);
   pinMode(Button_Pin,INPUT);
   pinMode(Light_Control_Pin,OUTPUT);
-  digitalWrite(Light_Control_Pin,HIGH);
+  digitalWrite(Light_Control_Pin,BackLight = 1);
   
-  back_light = 1;
-  engine_fan_mode=normal;
-  button_click_time=0;
-  engine_fan_current_level=0;
-
-  twoWire.begin();          //is it necessary?
-  //Serial.begin(38400);
-  lcdSetup();
-  delay (1000);
+  Get(summer);
 }
 
-
-void loop() 
-{
+void loop()
+{ 
   unsigned long Time=millis();
-  sensor.Read();
-  engine_temp=sensor.cTemp;
-  meassureVoltage();
-  buttonControl();
-  fanControl(engine_fan_mode);
   
-  if(Time>(loop_saved_time+2000))
-  {  
-    showDataOnLcd();
-    loop_saved_time=Time;
+  LoopSpeed(5000,Time);     // make it work (in debug library
+  buttonControl(Time);          // zrobić aby przy max jednej/dwóch zmiennych program aktywował funkcje w różnych odstępach czasu     
+  fanControl(EngineFan_Mode);   // replace "mode" witch "EngineFan_Mode"
+  
+  if(SensorA.Read())
+  { //SensorA_Error   put in other funtcion maybe?
+    SensorA.cTemp=0;
+    Debug::Print("Error_SensorA--------------====--");
   }
   
-//  delay(RefreshTime);
+  delay(10);
+  if(Time>=(loop_saved_time+10000))
+  {                       // make it look clearly
+    displayerControl();
+    Get(Time);
+    Get(readVoltage(EngineTemp_R,REF)/10-50,"TempR: ");
+    Get(Engine_Temperature = readVoltage(EngineTemp_L,REF)/10-50,"TempL: ");
+    Engine_Temperature+= readVoltage(EngineTemp_L,REF)/10-50;
+    Get(Engine_Temperature/2,"Temperatura Silnika: ");
+    Get(SensorA.cTemp,"TempA: ");
+    Get(SensorA.Humidity,"Humidity: ");
+    Debug::Print("*******");
+
+    Circut_Voltage=(readVoltage (V12_VoltageRead_Pin,REF));   
+    Battery_Voltage=(V120_VoltageRead_Pin,REF);
+    
+    displayerControl();
+    loop_saved_time=Time;
+  }
 }
 
 void lcdSetup (void)
@@ -133,116 +113,99 @@ void lcdSetup (void)
   lcd.backlight();
   
   lcd.setCursor(0,0); 
-  lcd.print("CircuitV: ");
-  lcd.setCursor(19,0);
-  lcd.print("L");
+  lcd.print("12V : ");
+  lcd.setCursor(10,0); 
+  lcd.print("120V: ");
 
   lcd.setCursor(0,1); 
-  lcd.print("BatteryV: ");
-  lcd.setCursor(19,1);
-  lcd.print("P");
+  lcd.print("TemA: ");
+  lcd.setCursor(10,1); 
+  lcd.print("TemS:");
 
   lcd.setCursor(0,2); 
-  lcd.print("Engine_Temp: ");
-  lcd.setCursor(19,2);
-  lcd.print("C");
-
-  lcd.setCursor(0,3); 
-  lcd.print("FanMode:");
-
-}
-
-void showDataOnLcd (void)
-{
-  float output;
-
-  lcd.setCursor(10,0);
-  output=circuit_voltage;
-  lcd.print(output/100,2);  
-
-  lcd.setCursor(10,1);
-  output=battery_voltage;
-  lcd.print(output/10,1);  
+  lcd.print("TemL: ");
+  lcd.setCursor(10,2); 
+  lcd.print("TemR: ");
   
-  lcd.setCursor(14,2);
-  lcd.print(engine_temp,1); 
-  if(engine_temp<10000)
-    lcd.print(" "); 
-
-  lcd.setCursor(16,0);
-  lcd.print(Read_Pin_Temp(A6));
-  lcd.setCursor(16,1);
-  lcd.print(Read_Pin_Temp(A7));
+  lcd.setCursor(0,3); 
+  lcd.print("HumA: ");
+  lcd.setCursor(10,3); 
+  lcd.print("Fan : ");
 }
 
-void  meassureVoltage (void)
-{
-  float p,P,R1,R2,X = 0;
+void displayerControl()
+{ 
+  lcd.setCursor(6,0); 
+  lcd.print(Circut_Voltage);
+  lcd.setCursor(16,0); 
+  lcd.print(Battery_Voltage);
 
-          // Circut Voltage
-  p =analogRead(V12_VoltageRead_Pin);     // read pin p=(0~~1023)
-  P = (p*Reference_Value /1023);          // change value of p to voltage (0V - ~5V)
-  R1 = 9850; 
-  R2 = 4630; 
-  X = (P* (R1+R2)/R2);                    // calculate X
-  X*=100;
-  circuit_voltage = X;                    // save value into circuit_voltage 
- 
-          // Battery Voltage
-  p =analogRead(V120_VoltageRead_Pin);
-  P = (p*Reference_Value /1023);
-  R1 = 99570;
-  R2 = 3258; 
-  X = (P* (R1+R2)/R2);
-  X*=10;
-  X*=Correction_Coefficient;     
-  battery_voltage = X;
+  lcd.setCursor(6,1); 
+  lcd.print(SensorAm_Temperature);
+  lcd.setCursor(16,1); 
+  lcd.print(Engine_Temperature);
+
+  lcd.setCursor(6,2); 
+  lcd.print(SensorL_Temperature);
+  lcd.setCursor(16,2); 
+  lcd.print(SensorR_Temperature);
+  
+  lcd.setCursor(6,3); 
+  lcd.print(SensorAm_Humidity);
+  lcd.setCursor(16,3); 
+  lcd.print(EngineFan_Mode);
 }
 
-int Read_Pin_Temp(const int Pin)
+void buttonControl(unsigned long &Time)
 {
-  // 1023p = ref mV
-  // analogRead(A1)p = x mV
-  // x = ref*analogRead(A1)/1023
-  float V = (Reference_Value*analogRead(Pin))/1023;  // voltage in mV
-
-  V *= 0.1;
-  V -= 50;
-  //500mV => 0*C
-  //+10mV => +1*C 
-  return (int)V-2;
-  //100mV => -40*C //minimum
+  switch(button.checkSignal(Time))
+  {
+    case 0:
+      break;
+    case 1:
+      Debug::Get(EngineFan_Mode,"Engine Fan Mode: ");
+      EngineFan_Mode++;
+      if(EngineFan_Mode==custom)
+        EngineFan_Mode=off;
+      break;
+    case 10:
+      if(BackLight)
+        digitalWrite(Light_Control_Pin,BackLight=0);
+      else
+        digitalWrite(Light_Control_Pin,BackLight=1);
+      break;
+  }
 }
 
 void fanControl (uint8_t mode)
 {
-  if(mode==engine_fan_current_level)
+  if(EngineFan_Mode==EngineFan_State)
     return;
-  switch(mode)
+  switch(mode)    // replace mode witch EngineFan_Mode
   {
     case off: 
       digitalWrite(Fan_Control_Pin1,HIGH);
       digitalWrite(Fan_Control_Pin2,HIGH);
       digitalWrite(Fan_Control_Pin3,HIGH);
-      engine_fan_current_level=0;
+      EngineFan_State=0;
       break;
     case minimum:
       digitalWrite(Fan_Control_Pin1,LOW);
       digitalWrite(Fan_Control_Pin2,HIGH);
       digitalWrite(Fan_Control_Pin3,HIGH);
-      engine_fan_current_level=1;
+      EngineFan_State=1;
       break;
     case medium:
       digitalWrite(Fan_Control_Pin1,HIGH);
       digitalWrite(Fan_Control_Pin2,LOW);
       digitalWrite(Fan_Control_Pin3,HIGH);
-      engine_fan_current_level=2;
+      EngineFan_State=2;
       break;      
     case maximum:
       digitalWrite(Fan_Control_Pin1,HIGH);
       digitalWrite(Fan_Control_Pin2,HIGH);
       digitalWrite(Fan_Control_Pin3,LOW);
-      engine_fan_current_level=3;
+      EngineFan_State=3;
       break;
     case winter:
       fanControl (automaticMode(60,75,90));
@@ -253,104 +216,23 @@ void fanControl (uint8_t mode)
     case summer:
       fanControl (automaticMode(40,60,80));
       break;
-    case custom:
-      fanControl (automaticMode());
-      break;
+ //   case custom:
+//      fanControl (automaticMode());
+//      break;
     default:
-      engine_fan_mode = 0;
+      EngineFan_Mode = 0;
       break;
   }
 }
 
-uint8_t automaticMode(float i1, float i2, float i3)
+uint8_t automaticMode( float i1, float i2, float i3)
 {
-  if(engine_temp>i3)
+  if(Engine_Temperature>i3)
     return 3;
-  else if (engine_temp>i2)
+  else if (Engine_Temperature>i2)
     return 2;
-  else if (engine_temp>i1)
+  else if (Engine_Temperature>i1)
     return 1;
   else 
     return 0; 
-}
-
-uint8_t automaticMode()
-{
-  automaticMode (custom_fan_mode.i1, custom_fan_mode.i2, custom_fan_mode.i3);
-}
-
-void buttonControl()
-{
-  switch (digitalRead(Button_Pin))
-  {
-  case HIGH:                          // button down
-    if(button_click_time)               // button is held                               
-      return;                             // do nothing
-    else                                // button has been clicked
-      button_click_time=millis();         // save the time of click
-    break;
-  case LOW:                           // button up
-    if (button_click_time==0)           //button is untouched
-      return;                             // do nothing
-    else                                //button is released
-    {
-      if((millis()-button_click_time)>1500)   // more than 1.5 sec
-        {
-          if(back_light)                        // if light is on
-          {
-            digitalWrite(Light_Control_Pin,LOW);  // turn light off
-            back_light=false;
-          }
-          else                                  // if light is off
-          {
-            digitalWrite(Light_Control_Pin,HIGH); // turn light on
-            back_light=true;
-          }
-        }
-        else                                  // less than 1.5 sec
-        {
-          engine_fan_mode++;                      // chenge mode of engine fan           
-          if(engine_fan_mode==7)                      // there is 8 modes (0-7)
-            engine_fan_mode=0;                        // mode number 7 (custom) not yet available)
-          printFanModeName(engine_fan_mode);          
-        }
-      button_click_time=0;                    // end button release section
-      return;                        
-    }                 
-  }
-}
-
-void printFanModeName (int8_t mode)
-{
-  lcd.setCursor(8,3);
-  switch(mode)
-  {
-    case off: 
-      lcd.print(" OFF  ");
-      break;
-    case minimum:
-      lcd.print(" 1    ");
-      break;
-    case medium:
-      lcd.print(" 2    ");
-      break;      
-    case maximum:
-      lcd.print(" 3    ");
-      break;
-    case winter:
-      lcd.print("Winter");
-      break;
-    case normal:
-      lcd.print("Normal");
-      break;
-    case summer:
-      lcd.print("Summer");
-      break;
-    case custom:            // not yet in use
-      lcd.print("Custom");
-      break;
-    default:
-      lcd.print(" ERROR");
-      break;
-  }
 }
