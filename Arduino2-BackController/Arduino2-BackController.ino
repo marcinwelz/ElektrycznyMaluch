@@ -31,10 +31,10 @@ enum fanModeName
   custom
 };
 
-//functionts                          // update names to higher standard!
+//functionts                          
 inline void displayerSetup (void);
-inline void fanControl (uint8_t mode);        //  read about inline vs noinline!
-uint8_t automaticMode (float,float,float);    // change to lambda or something more temporary!
+inline void fanControl (uint8_t mode);        
+uint8_t automaticMode (float,float,float);    
 inline void buttonControl (unsigned long &Time);
 inline void displayerControl(void);
 
@@ -43,8 +43,8 @@ AM2320 SensorA(&Wire);
 Button button(Button_Pin);
 LiquidCrystal_I2C lcd(0x27,20,4);
 
-//Variables     //modernize virable types to newest standards, sort them!
-unsigned long loop_saved_time =2000;    // move to "loop" or delete!
+//Variables     
+unsigned long loop_saved_time =2000;    
 bool          BackLight=0;
 uint8_t       EngineFan_Mode=normal;
 uint8_t       EngineFan_State=4;
@@ -76,19 +76,19 @@ void loop()
 { 
   unsigned long Time=millis();
   
-  LoopSpeed(5000,Time);     // make it work (in debug library
-  buttonControl(Time);          // zrobić aby przy max jednej/dwóch zmiennych program aktywował funkcje w różnych odstępach czasu     
-  fanControl(EngineFan_Mode);   // replace "mode" witch "EngineFan_Mode"
+  LoopSpeed(5000,Time);     
+  buttonControl(Time);               
+  fanControl(EngineFan_Mode);   
   
   if(SensorA.Read())
-  { //SensorA_Error   put in other funtcion maybe?
+  { //SensorA_Error
     SensorA.cTemp=0;
     Debug::Print("Error_SensorA--------------====--");
   }
   
   delay(10);
   if(Time>=(loop_saved_time+10000))
-  {                       // make it look clearly
+  {                       
     displayerControl();
     Get(Time);
     Get(readVoltage(EngineTemp_R,REF)/10-50,"TempR: ");
@@ -181,7 +181,7 @@ void fanControl (uint8_t mode)
 {
   if(EngineFan_Mode==EngineFan_State)
     return;
-  switch(mode)    // replace mode witch EngineFan_Mode
+  switch(mode)    
   {
     case off: 
       digitalWrite(Fan_Control_Pin1,HIGH);
