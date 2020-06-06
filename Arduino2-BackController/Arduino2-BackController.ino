@@ -32,11 +32,11 @@ enum fanModeName
 };
 
 //functionts                          
-inline void displayerSetup (void);
+inline void displaySetup (void);
 inline void fanControl (uint8_t mode);        
 uint8_t automaticMode (float,float,float);    
 inline void buttonControl (unsigned long &Time);
-inline void displayerControl(void);
+inline void displayControl(void);
 
 //objects
 AM2320 SensorA(&Wire);
@@ -89,7 +89,7 @@ void loop()
   delay(10);
   if(Time>=(loop_saved_time+10000))
   {                       
-    displayerControl();
+    displayControl();
     Get(Time);
     Get(readVoltage(EngineTemp_R,REF)/10-50,"TempR: ");
     Get(Engine_Temperature = readVoltage(EngineTemp_L,REF)/10-50,"TempL: ");
@@ -102,7 +102,6 @@ void loop()
     Circut_Voltage=(readVoltage (V12_VoltageRead_Pin,REF));   
     Battery_Voltage=(V120_VoltageRead_Pin,REF);
     
-    displayerControl();
     loop_saved_time=Time;
   }
 }
