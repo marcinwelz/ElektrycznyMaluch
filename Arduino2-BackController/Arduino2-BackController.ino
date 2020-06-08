@@ -1,4 +1,4 @@
-//    Version 3.3   //
+//  Version 3.3  //
 
 #define K_Debug 1
 
@@ -99,18 +99,18 @@ void loop()
       SensorA.cTemp=0;  //SensorA_Error
     
     Get(Time);
-    Get(SensorR_Temperature = readVoltage(SensorR_Pin,REF)/10-50, "TempR: ");
-    Get(SensorL_Temperature = readVoltage(SensorL_Pin,REF)/10-50, "TempL: "); 
+    Get(SensorR_Temperature = (float)readVoltage(SensorR_Pin,REF)/10-50, "TempR: ");
+    Get(SensorL_Temperature = (float)readVoltage(SensorL_Pin,REF)/10-50, "TempL: "); 
     Get(Engine_Temperature = (SensorL_Temperature+SensorR_Temperature)/2, "Temperatura Silnika: ");
     Get(Circut_Voltage=readVoltage(V12_VoltageRead_Pin,REF) * (R1+R2)/(R2*1000), "Napięcie Obwodu: ");
     Get(Battery_Voltage=readVoltage(V120_VoltageRead_Pin,REF) * (R3+R4)/(R4*1000), "Napięcie Baterii: ");
-    Get(SensorA.cTemp, "TempA: ");
-    Get(SensorA.Humidity, "HumiA: ");
+    Get(SensorAm_Temperature = SensorA.cTemp, "TempA: ");
+    Get(SensorAm_Humidity = SensorA.Humidity, "HumiA: ");
     Get(Engine_Speed,"Engine Rotations: ");
     Debug::Print("*******");
     
-    // Custom Filters ??
-    //Battery_Voltage+=(Battery_Voltage/1000)*15;    // +1,5%
+    // Custom Filters
+    Battery_Voltage+=(Battery_Voltage/1000)*15;    // +1,5%
     
     Engine_Speed=0;
     lcdControl();
@@ -130,15 +130,15 @@ void lcdSetup (void)
   lcd.setCursor(0,1); 
   lcd.print("TemS:");
   lcd.setCursor(10,1); 
-  lcd.print("TemL:");
+  lcd.print("TemR:");
 
   lcd.setCursor(0,2); 
   lcd.print("TemA:");    //
   lcd.setCursor(10,2); 
-  lcd.print("TemR:");
+  lcd.print("TemL:");
   
   lcd.setCursor(0,3); 
-  lcd.print("Speed");    //"HumA:"
+  lcd.print("Speed:");    //"HumA:"
   lcd.setCursor(10,3); 
   lcd.print("Fan :");
 }
@@ -159,26 +159,26 @@ void lcdControl()
   lcd.setCursor(15,1); 
   lcd.print("    ");
   lcd.setCursor(5,1); 
-  lcd.print(Engine_Temperature);
+  lcd.print(Engine_Temperature,1);
   lcd.setCursor(15,1); 
-  lcd.print(SensorL_Temperature);
+  lcd.print(SensorR_Temperature,1);
 
   lcd.setCursor(5,2); 
   lcd.print("    ");
   lcd.setCursor(15,2); 
   lcd.print("    ");
   lcd.setCursor(5,2); 
-  lcd.print(SensorAm_Temperature);  
+  lcd.print(SensorAm_Temperature,1);  
   lcd.setCursor(15,2); 
-  lcd.print(SensorR_Temperature);
+  lcd.print(SensorL_Temperature,1);
 
-  lcd.setCursor(5,3); 
+  lcd.setCursor(6,3);   // 5 --> 6
   lcd.print("    ");
   lcd.setCursor(15,3); 
   lcd.print("    ");
-  lcd.setCursor(5,3); 
+  lcd.setCursor(6,3);   // 5 --> 6
   lcd.print(Engine_Speed*60);    //SensorAm_Humidity
-  lcd.setCursor(15,3); 
+  lcd.setCursor(15,3);  
   lcd.print(EngineFan_Mode);
 }
 
