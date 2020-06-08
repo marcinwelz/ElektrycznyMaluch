@@ -109,9 +109,10 @@ void loop()
     Get(Engine_Speed,"Engine Rotations: ");
     Debug::Print("*******");
     
-    // Custom Filters
-    Battery_Voltage+=(Battery_Voltage/1000)*15;    // +1,5%
+    // Custom Filters ??
+    //Battery_Voltage+=(Battery_Voltage/1000)*15;    // +1,5%
     
+    Engine_Speed=0;
     lcdControl();
   }
 }
